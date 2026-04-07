@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Limpiador de Direcciones Colombia</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #efefec;
+    --text: #1a1a18; --text2: #6b6b67; --text3: #9a9a95;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --blue-bg: #E6F1FB; --blue: #185FA5; --blue-mid: #378ADD;
+    --green-bg: #EAF3DE; --green: #3B6D11; --green-mid: #1D9E75;
+    --amber-bg: #FAEEDA; --amber: #854F0B;
+    --red-bg: #FCEBEB; --red: #A32D2D;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f0efea; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+  .card { background: var(--bg); border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.06); max-width: 860px; width: 100%; padding: 2rem 2rem 2.5rem; }
+
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
+  .logo-icon { width: 36px; height: 36px; background: var(--text); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .logo-icon svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 1.5; }
+  .logo h1 { font-size: 17px; font-weight: 600; color: var(--text); }
+  .logo p { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+  .pipeline { display: flex; border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1.75rem; }
+  .pipe-step { flex: 1; padding: 10px 8px; background: var(--bg2); border-right: 0.5px solid var(--border); text-align: center; transition: background 0.2s; }
+  .pipe-step:last-child { border-right: none; }
+  .pipe-step .ps-icon { font-size: 15px; margin-bottom: 2px; }
+  .pipe-step .ps-num { font-size: 10px; color: var(--text3); }
+  .pipe-step .ps-label { font-size: 11px; font-weight: 500; color: var(--text2); }
+  .pipe-step.active { background: var(--blue-bg); }
+  .pipe-step.active .ps-label { color: var(--blue); }
+  .pipe-step.done { background: var(--green-bg); }
+  .pipe-step.done .ps-label { color: var(--green); }
+
+  .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius-lg); padding: 2.5rem 2rem; text-align: center; cursor: pointer; position: relative; transition: border-color 0.2s, background 0.2s; }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--blue-mid); background: var(--blue-bg); }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { width: 44px; height: 44px; margin: 0 auto 12px; background: var(--bg2); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .upload-icon svg { width: 22px; height: 22px; stroke: var(--text2); fill: none; stroke-width: 1.5; }
+  .upload-label { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .upload-hint { font-size: 13px; color: var(--text2); }
+
+  .file-pill { display: none; align-items: center; gap: 12px; background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-top: 10px; }
+  .file-pill.show { display: flex; }
+  .file-meta { flex: 1; min-width: 0; }
+  .file-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-size { font-size: 11px; color: var(--text2); }
+  .remove-btn { background: none; border: none; cursor: pointer; color: var(--text2); font-size: 17px; padding: 2px 6px; border-radius: 4px; }
+  .remove-btn:hover { background: var(--bg3); }
+
+  .error-box { display: none; background: var(--red-bg); border: 0.5px solid #F09595; border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: var(--red); margin-top: 10px; }
+  .error-box.show { display: block; }
+
+  .preview-section { margin-top: 1.75rem; display: none; }
+  .preview-section.show { display: block; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+
+  .stats-row { display: flex; gap: 10px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 90px; background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; }
+  .stat-val { font-size: 22px; font-weight: 600; color: var(--text); }
+  .stat-lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  .table-wrap { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-x: auto; margin-bottom: 1.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 640px; }
+  th { background: var(--bg2); padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  td { padding: 7px 10px; color: var(--text); border-bottom: 0.5px solid var(--border); vertical-align: top; word-break: break-word; line-height: 1.4; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg2); }
+
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .badge-ok { background: var(--green-bg); color: var(--green); }
+  .badge-pipe { background: var(--blue-bg); color: var(--blue); }
+  .badge-pend { background: var(--amber-bg); color: var(--amber); }
+  .badge-err { background: var(--red-bg); color: var(--red); }
+
+  .two-phase { display: flex; gap: 10px; margin-bottom: 1.25rem; }
+  .phase-card { flex: 1; background: var(--bg2); border-radius: var(--radius); padding: 10px 14px; }
+  .phase-card .pc-title { font-size: 11px; font-weight: 600; margin-bottom: 3px; }
+  .phase-card .pc-desc { font-size: 11px; color: var(--text2); line-height: 1.5; }
+  .pc-ai { color: var(--blue); }
+  .pc-geo { color: var(--green-mid); }
+
+  .action-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .btn-primary { background: var(--text); color: #fff; border: none; border-radius: var(--radius); padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
+  .btn-secondary { background: var(--bg); border: 0.5px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .btn-secondary:hover { background: var(--bg2); }
+  .btn-secondary:disabled { opacity: 0.38; cursor: not-allowed; }
+
+  .progress-wrap { display: none; margin-bottom: 1rem; }
+  .progress-wrap.show { display: block; }
+  .phase-tag { font-size: 11px; font-weight: 600; margin-bottom: 5px; }
+  .phase-tag.ai { color: var(--blue); }
+  .phase-tag.geo { color: var(--green-mid); }
+  .bar-bg { height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-bottom: 5px; }
+  .bar-fill { height: 100%; border-radius: 3px; width: 0%; transition: width 0.25s; }
+  .fill-ai { background: var(--blue-mid); }
+  .fill-geo { background: var(--green-mid); }
+  .bar-text { font-size: 12px; color: var(--text2); }
+
+  .success-banner { display: none; background: var(--green-bg); border: 0.5px solid #C0DD97; border-radius: var(--radius); padding: 14px 16px; margin-top: 1rem; align-items: flex-start; gap: 10px; }
+  .success-banner.show { display: flex; }
+  .success-banner p { font-size: 13px; color: #27500A; flex: 1; line-height: 1.6; }
+
+  @media (max-width: 600px) {
+    body { padding: 0; }
+    .card { border-radius: 0; min-height: 100vh; padding: 1.25rem; }
+    .two-phase { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    </div>
+    <div>
+      <h1>Limpiador de direcciones · Colombia</h1>
+      <p>IA + Geocodificación automática para equipos de operaciones</p>
+    </div>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipe-step active" id="step1"><div class="ps-icon">📂</div><div class="ps-num">1</div><div class="ps-label">Cargar archivo</div></div>
+    <div class="pipe-step" id="step2"><div class="ps-icon">🤖</div><div class="ps-num">2</div><div class="ps-label">IA limpia dirección</div></div>
+    <div class="pipe-step" id="step3"><div class="ps-icon">📍</div><div class="ps-num">3</div><div class="ps-label">Geocodificación</div></div>
+    <div class="pipe-step" id="step4"><div class="ps-icon">⬇️</div><div class="ps-num">4</div><div class="ps-label">Descargar Excel</div></div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls"/>
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div class="upload-label">Arrastra tu archivo aquí</div>
+    <div class="upload-hint">o haz clic para seleccionar · .xlsx o .xls</div>
+  </div>
+
+  <div class="file-pill" id="filePill">
+    <div style="font-size:20px">📊</div>
+    <div class="file-meta">
+      <div class="file-name" id="fileName">—</div>
+      <div class="file-size" id="fileSize">—</div>
+    </div>
+    <button class="remove-btn" id="removeFile">✕</button>
+  </div>
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="preview-section" id="previewSection">
+    <div class="stats-row" id="statsRow"></div>
+
+    <p class="section-label">Vista previa — primeras 8 filas</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:28%">Dirección original</th>
+            <th style="width:22%">Dirección limpia</th>
+            <th style="width:20%">Complemento</th>
+            <th style="width:10%">Latitud</th>
+            <th style="width:10%">Longitud</th>
+            <th style="width:10%">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+
+    <div class="two-phase">
+      <div class="phase-card">
+        <div class="pc-title pc-ai">Fase 1 — IA (Claude Sonnet)</div>
+        <div class="pc-desc">Limpia la dirección vial, extrae el complemento y normaliza abreviaciones.</div>
+      </div>
+      <div class="phase-card">
+        <div class="pc-title pc-geo">Fase 2 — Geocodificación (OpenStreetMap)</div>
+        <div class="pc-desc">Obtiene latitud y longitud exactas para cada dirección limpia, usando Colombia como contexto.</div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-primary" id="processBtn" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Procesar con IA + Geocodificar
+      </button>
+      <button class="btn-secondary" id="downloadBtn" disabled>⬇ Descargar Excel</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="phase-tag ai" id="phaseTag">Fase 1 — Limpiando con IA</div>
+      <div class="bar-bg"><div class="bar-fill fill-ai" id="barFill"></div></div>
+      <div class="bar-text" id="barText">Iniciando...</div>
+    </div>
+
+    <div class="success-banner" id="successBanner">
+      <p id="successMsg"></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const uploadZone=$('uploadZone'),fileInput=$('fileInput'),filePill=$('filePill');
+const fileName=$('fileName'),fileSize=$('fileSize'),removeFile=$('removeFile');
+const previewSection=$('previewSection'),previewBody=$('previewBody'),statsRow=$('statsRow');
+const processBtn=$('processBtn'),downloadBtn=$('downloadBtn');
+const progressWrap=$('progressWrap'),barFill=$('barFill'),barText=$('barText'),phaseTag=$('phaseTag');
+const errorBox=$('errorBox'),successBanner=$('successBanner'),successMsg=$('successMsg');
+
+let workbook=null,originalRows=[],processedRows=[],headerRow=[],dataStartRow=0,excelBlob=null;
+
+function setStep(n){for(let i=1;i<=4;i++){const el=$('step'+i);el.classList.remove('active','done');if(i<n)el.classList.add('done');else if(i===n)el.classList.add('active');}}
+function showError(msg){errorBox.textContent=msg;errorBox.classList.add('show');}
+function hideError(){errorBox.classList.remove('show');}
+function formatBytes(b){return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function detectHeaderRow(sheet){
+  const data=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+  for(let i=0;i<Math.min(5,data.length);i++){if(data[i].map(c=>String(c).toLowerCase()).some(c=>c.includes('direcci')))return i;}
+  return 0;
+}
+function findCol(h,terms){for(let i=0;i<h.length;i++){const v=String(h[i]).toLowerCase();if(terms.some(t=>v.includes(t)))return i;}return -1;}
+
+function parseFile(file){
+  hideError();
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      workbook=XLSX.read(e.target.result,{type:'array'});
+      const sheet=workbook.Sheets[workbook.SheetNames[0]];
+      const allData=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+      const hIdx=detectHeaderRow(sheet);
+      headerRow=allData[hIdx]||[];
+      dataStartRow=hIdx;
+      originalRows=allData.slice(hIdx+1).filter(r=>r.some(c=>String(c).trim()!==''));
+      const addrCol=findCol(headerRow,['direccion','dirección','address']);
+      renderStats(originalRows,addrCol<0?0:addrCol);
+      renderPreview(originalRows.slice(0,8),addrCol<0?0:addrCol);
+      previewSection.classList.add('show');
+      processBtn.disabled=false;
+      setStep(1);
+    }catch(err){showError('No se pudo leer el archivo. Asegúrate de que sea un Excel válido (.xlsx / .xls).');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderStats(rows,addrCol){
+  const withPipe=rows.filter(r=>String(r[addrCol]||'').includes('|')).length;
+  const withExtra=rows.filter(r=>/barrio|conjunto|bloque|apto|local|edificio|torre|casa|interior|piso|ced\s|casillero/i.test(String(r[addrCol]||''))).length;
+  statsRow.innerHTML=`
+    <div class="stat-card"><div class="stat-val">${rows.length}</div><div class="stat-lbl">Filas totales</div></div>
+    <div class="stat-card"><div class="stat-val">${withPipe}</div><div class="stat-lbl">Con separador "|"</div></div>
+    <div class="stat-card"><div class="stat-val">${withExtra}</div><div class="stat-lbl">Con info extra</div></div>
+    <div class="stat-card"><div class="stat-val" id="geoVal">0</div><div class="stat-lbl">Geocodificadas</div></div>`;
+}
+
+function quickClean(raw){
+  const s=String(raw||'').trim();
+  if(s.includes('|')){const[m,...r]=s.split('|');return{dir:m.trim(),comp:r.join('|').trim(),status:'pipe'};}
+  return{dir:s,comp:'',status:'pending'};
+}
+
+function renderPreview(rows,addrCol){
+  previewBody.innerHTML='';
+  rows.forEach(row=>{
+    const raw=String(row[addrCol]||'');
+    const{dir,comp,status}=quickClean(raw);
+    const badge=status==='pipe'?'<span class="badge badge-pipe">Separada</span>':'<span class="badge badge-pend">Pendiente IA</span>';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${raw.substring(0,68)}${raw.length>68?'…':''}</td><td>${dir.substring(0,52)}</td><td>${comp.substring(0,42)||'—'}</td><td style="color:#9a9a95;font-size:11px">—</td><td style="color:#9a9a95;font-size:11px">—</td><td>${badge}</td>`;
+    previewBody.appendChild(tr);
+  });
+}
+
+async function cleanWithAI(address){
+  const prompt=`Eres un experto en direcciones colombianas. Separa la dirección principal de la información complementaria.
+
+REGLAS:
+1. Dirección principal: SOLO tipo de vía + número geocodificable (ej: "Calle 63F # 76-66", "Carrera 78H # 56A-25 Sur").
+2. Complemento: torre, apto, bloque, barrio, conjunto, local, edificio, referencias, casillero CED, nombres de personas.
+3. Si hay "|" úsalo como separador pero valida que la parte principal sea solo la vía.
+4. Casillero o CED al inicio → va completo al complemento.
+5. Normaliza: Cra→Carrera, Cl→Calle, Tv→Transversal, Dg→Diagonal, Av→Avenida.
+6. Responde SOLO JSON sin markdown: {"direccion": "...", "complemento": "..."}
+
+Dirección: "${address}"`;
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+  });
+  const data=await res.json();
+  const text=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
+  const p=JSON.parse(text);
+  return{direccion:p.direccion||'',complemento:p.complemento||''};
+}
+
+async function geocode(address,city){
+  const cityHint=city&&String(city).trim()?String(city).trim():'Bogotá';
+  const q=encodeURIComponent(`${address}, ${cityHint}, Colombia`);
+  const url=`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=co`;
+  const res=await fetch(url,{headers:{'Accept-Language':'es','User-Agent':'LimpiadorDireccionesCO/1.0'}});
+  const data=await res.json();
+  if(data&&data.length>0)return{lat:parseFloat(parseFloat(data[0].lat).toFixed(6)),lon:parseFloat(parseFloat(data[0].lon).toFixed(6)),ok:true};
+  return{lat:'',lon:'',ok:false};
+}
+
+processBtn.addEventListener('click',async()=>{
+  processBtn.disabled=true;downloadBtn.disabled=true;
+  successBanner.classList.remove('show');excelBlob=null;
+  progressWrap.classList.add('show');processedRows=[];
+  const sheet=workbook.Sheets[workbook.SheetNames[0]];
+  const allData=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+  const addrCol=Math.max(0,findCol(headerRow,['direccion','dirección','address']));
+  const compCol=addrCol+1;
+  const latColOrig=findCol(headerRow,['lat','latitud','latitude']);
+  const lonColOrig=findCol(headerRow,['lon','lng','longitud','longitude']);
+  const cityCol=findCol(headerRow,['ciudad']);
+  const total=originalRows.length;
+  let geoOk=0;
+
+  // Phase 1
+  phaseTag.textContent='Fase 1 — Limpiando con IA';phaseTag.className='phase-tag ai';
+  barFill.className='bar-fill fill-ai';setStep(2);
+  const cleaned=[];
+  for(let i=0;i<total;i++){
+    const row=[...originalRows[i]];
+    const raw=String(row[addrCol]||'').trim();
+    barFill.style.width=Math.round(((i+1)/total)*50)+'%';
+    barText.textContent=`IA: fila ${i+1} de ${total}…`;
+    try{const r=await cleanWithAI(raw);row[addrCol]=r.direccion;row.splice(compCol,0,r.complemento);}
+    catch(e){const{dir,comp}=quickClean(raw);row[addrCol]=dir;row.splice(compCol,0,comp);}
+    cleaned.push(row);
+  }
+
+  const shift=n=>n>=0?(n>=compCol?n+1:n):-1;
+  const latNew=shift(latColOrig),lonNew=shift(lonColOrig),cityNew=shift(cityCol);
+
+  // Phase 2
+  phaseTag.textContent='Fase 2 — Geocodificando con OpenStreetMap';phaseTag.className='phase-tag geo';
+  barFill.className='bar-fill fill-geo';setStep(3);
+  for(let i=0;i<cleaned.length;i++){
+    const row=cleaned[i];
+    const addr=String(row[addrCol]||'').trim();
+    const city=cityNew>=0?row[cityNew]:'';
+    barFill.style.width=(50+Math.round(((i+1)/total)*50))+'%';
+    barText.textContent=`Geocodificando: fila ${i+1} de ${total}…`;
+    try{
+      const g=await geocode(addr,city);
+      if(latNew>=0)row[latNew]=g.ok?g.lat:'';
+      if(lonNew>=0)row[lonNew]=g.ok?g.lon:'';
+      if(g.ok){geoOk++;const v=$('geoVal');if(v)v.textContent=geoOk;}
+    }catch(e){if(latNew>=0)row[latNew]='';if(lonNew>=0)row[lonNew]='';}
+    processedRows.push(row);
+    await sleep(1100);
+  }
+
+  barFill.style.width='100%';barText.textContent='Listo. Generando archivo…';
+
+  // Build Excel
+  const newData=[];
+  for(let i=0;i<=dataStartRow;i++){
+    const row=[...(allData[i]||[])];
+    if(i===dataStartRow)row.splice(compCol,0,'Direccion complementaria');
+    newData.push(row);
+  }
+  processedRows.forEach(r=>newData.push(r));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(newData);
+  XLSX.utils.book_append_sheet(wb,ws,'Direcciones limpias');
+  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  excelBlob=new Blob([out],{type:'application/octet-stream'});
+
+  progressWrap.classList.remove('show');
+  const geoFail=total-geoOk;
+  const note=geoFail>0?` · ${geoFail} sin coordenadas (no encontradas en OSM).`:'';
+  successMsg.innerHTML=`<strong>${total} filas procesadas.</strong> ${geoOk} geocodificadas correctamente.${note} Tu archivo está listo.`;
+  successBanner.classList.add('show');
+  downloadBtn.disabled=false;processBtn.disabled=false;setStep(4);
+});
+
+downloadBtn.addEventListener('click',()=>{
+  if(!excelBlob)return;
+  const url=URL.createObjectURL(excelBlob);
+  const a=document.createElement('a');a.href=url;a.download='direcciones_limpias.xlsx';
+  a.click();URL.revokeObjectURL(url);
+});
+
+fileInput.addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  fileName.textContent=file.name;fileSize.textContent=formatBytes(file.size);
+  filePill.classList.add('show');parseFile(file);
+});
+removeFile.addEventListener('click',()=>{
+  fileInput.value='';filePill.classList.remove('show');
+  previewSection.classList.remove('show');successBanner.classList.remove('show');
+  progressWrap.classList.remove('show');processBtn.disabled=true;downloadBtn.disabled=true;
+  workbook=null;originalRows=[];processedRows=[];excelBlob=null;setStep(1);hideError();
+});
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop',e=>{
+  e.preventDefault();uploadZone.classList.remove('drag-over');
+  const file=e.dataTransfer.files[0];
+  if(file&&(file.name.endsWith('.xlsx')||file.name.endsWith('.xls'))){
+    fileName.textContent=file.name;fileSize.textContent=formatBytes(file.size);
+    filePill.classList.add('show');parseFile(file);
+  }else{showError('Por favor sube un archivo .xlsx o .xls');}
+});
+</script>
+</body>
+</html>
