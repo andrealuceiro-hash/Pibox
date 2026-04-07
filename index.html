@@ -280,96 +280,257 @@ function renderPreview(rows,addrCol){
 }
 
 async function cleanWithAI(address){
-  const prompt=`Eres un experto en nomenclatura vial colombiana. Tu única tarea es separar la dirección oficial de cualquier información complementaria.
+  const prompt=`Eres un normalizador de direcciones colombianas. Tienes DOS tareas:
+1. Extraer la dirección vial pura y ponerla en "direccion"
+2. Poner TODO lo demás en "complemento"
 
-═══════════════════════════════════════════════
-ESTRUCTURA OFICIAL DE DIRECCIÓN COLOMBIANA
-═══════════════════════════════════════════════
-Formato: [Tipo de vía] [Número de vía] # [Vía generadora] - [Número de placa]
-Ejemplo: Calle 63F # 76-66 | Carrera 7A # 45-30 Sur | Diagonal 22 # 14-55
+Responde SOLO con JSON válido sin markdown: {"direccion": "...", "complemento": "..."}
 
-TIPOS DE VÍA VÁLIDOS (con sus abreviaciones a normalizar):
-- Calle    → Calle   (Cl, Cll, Cl., Calle)
-- Carrera  → Carrera (Cra, Cra., Kr, Kra, Cr)
-- Avenida  → Avenida (Av, Av., Ave)
-- Diagonal → Diagonal (Dg, Dg.)
-- Transversal → Transversal (Tv, Tv., Trans)
-- Autopista → Autopista (Auto Norte, Auto Sur, etc.)
-- Circular → Circular
-- Circunvalar → Circunvalar
+══════════════════════════════════════════════════════
+ESTRUCTURA DE UNA DIRECCIÓN COLOMBIANA VÁLIDA
+══════════════════════════════════════════════════════
 
-SUFIJOS DE VÍA que SÍ pertenecen a la dirección principal (NO son complemento):
-- Letras: A, B, C, D... ej: "Calle 63F", "Carrera 7A"
-- BIS: ej: "Carrera 11 BIS"
-- Sur, Norte, Este, Oeste: ej: "Calle 13 Sur", "Carrera 56A-25 Sur"
-- Combinaciones: "56A-25 Sur", "124 A 90"
+La dirección tiene EXACTAMENTE esta forma y nada más:
+  [Tipo de vía] [Número de vía] [#] [Número generador] [-] [Número de placa] [Cardinal?]
 
-═══════════════════════════════════════════════
-REGLA PRINCIPAL
-═══════════════════════════════════════════════
-La dirección limpia = [Tipo de vía] [Número] # [Vía generadora] - [Placa]
-TODO lo que venga después de esa estructura va al complemento.
+Componentes VÁLIDOS dentro de la dirección (y solo estos):
+  ✓ Tipo de vía: Calle, Carrera, Diagonal, Transversal, Avenida, AK, AC, CL, KR, DG, TV y sus variantes
+  ✓ Número de vía: puede incluir letra y BIS → "113", "2A", "12 BIS", "107A BIS", "66C", "37B"
+  ✓ Símbolo # (o equivalentes: No., N°, N, Nro)
+  ✓ Número generador: puede incluir letra → "89F", "17A", "69Q", "38C", "0"
+  ✓ Guión - y número de placa → "28", "35", "6", "9"
+  ✓ Cardinal SOLO si va INMEDIATAMENTE después de la placa → "Sur", "Norte", "Este", "Oeste"
+  ✓ BIS como modificador de vía → "Carrera 12 BIS", "Diagonal 22C BIS"
 
-═══════════════════════════════════════════════
-QUÉ VA AL COMPLEMENTO (NO a la dirección)
-═══════════════════════════════════════════════
-- Edificio, Torre, Bloque, Etapa
-- Apartamento / Apto / Apt
-- Casa, Interior (Int), Piso
-- Local, Oficina, Consultorio
-- Conjunto, Urbanización, Ciudadela, Unidad Residencial
-- Barrio, Sector, Zona
-- Referencias: "diagonal al", "frente a", "cerca de"
-- Nombres propios de conjuntos o edificios
-- Nombres de personas o empresas
-- Casillero, CED, W-xxxx (códigos de casillero)
-- Instrucciones de entrega
+══════════════════════════════════════════════════════
+REGLA DE CORTE — LA MÁS IMPORTANTE
+══════════════════════════════════════════════════════
 
-═══════════════════════════════════════════════
+La dirección TERMINA exactamente después del número de placa (y el cardinal si lo hay).
+
+CUALQUIER palabra que aparezca DESPUÉS del número de placa es complemento:
+  → "Interior", "Int"        → COMPLEMENTO
+  → "Apartamento", "Apto", "Apt", "Ap" → COMPLEMENTO
+  → "Torre", "T"             → COMPLEMENTO
+  → "Bloque", "Bl", "Blq"   → COMPLEMENTO
+  → "Manzana", "Mz"          → COMPLEMENTO
+  → "Piso"                   → COMPLEMENTO
+  → "Casa"                   → COMPLEMENTO
+  → "Local"                  → COMPLEMENTO
+  → "Edificio"               → COMPLEMENTO
+  → "Conjunto"               → COMPLEMENTO
+  → "Barrio", "BRR", "BR"    → COMPLEMENTO
+  → Nombre de ciudad (Bogotá, Usme, Kennedy, Engativá...) → COMPLEMENTO
+  → Nombre de conjunto o edificio → COMPLEMENTO
+  → Códigos (W+num, CED, código postal) → COMPLEMENTO
+  → Instrucciones, referencias, teléfonos, nombres → COMPLEMENTO
+  → TODO lo que viene después del separador "|" → COMPLEMENTO
+
+REGLA DE ORO: Si no es parte del patrón [vía] [#] [generador] [-] [placa] [cardinal],
+NO pertenece a la dirección. Va al complemento, sin excepción.
+
+══════════════════════════════════════════════════════
+NORMALIZACIÓN DE ABREVIACIONES
+══════════════════════════════════════════════════════
+
+Conserva el tipo de vía tal como viene en el input pero normalizado:
+  Calle, Cll, Cl, CL, calle        → Calle
+  Carrera, Cra, Cra., Kr, Kra, cr  → Carrera
+  Diagonal, Dg, DG                  → Diagonal
+  Transversal, Tv, TV, Trans        → Transversal
+  Avenida Carrera, Av Cra, AK      → Avenida Carrera (o AK)
+  Avenida Calle, Av Calle, AC      → Avenida Calle (o AC)
+
+Letras modificadoras: conservar en mayúscula pegadas al número
+  "66 C" → "66C" | "17 a" → "17A" | "carrera 81 h" → "Carrera 81H"
+Placa sin cero inicial: "05"→"5" | "06"→"6" | "09"→"9"
+BIS siempre en mayúsculas.
+
+══════════════════════════════════════════════════════
+RECONOCER ESTRUCTURA SIN SEPARADORES
+══════════════════════════════════════════════════════
+
+"No.", "No", "N°", "Nro", "N" = símbolo #
+Cuando no hay separadores, los números van por posición:
+  "CRA 48 N 150 A 63 TORRE 7"    → dirección: "Carrera 48 # 150A - 63"  complemento: "Torre 7"
+  "calle 152 b 72 91 torre 9"    → dirección: "Calle 152B # 72 - 91"   complemento: "Torre 9"
+  "Calle 54 10 36 apto 509"      → dirección: "Calle 54 # 10 - 36"     complemento: "Apto 509"
+  "Calle 71 c 94 a 72 interior 4"→ dirección: "Calle 71C # 94A - 72"   complemento: "Interior 4"
+
+"SUR" pegado al generador: "42g58sur" → "42G - 58 Sur" (Sur es parte de la dirección)
+"SUR" como cardinal después de placa: "35 sur" → "- 35 Sur" (Sur es parte de la dirección)
+Pero "sur" con más texto: "35 sur Interior 24" → dirección termina en "Sur", Interior=complemento
+
+══════════════════════════════════════════════════════
 CASOS ESPECIALES
-═══════════════════════════════════════════════
-1. Separador "|": lo que está antes del | suele ser la dirección, lo de después el complemento. Valida igual.
-2. Casillero / CED / W-xxxx al inicio: TODO va al complemento, extrae la dirección del texto que sigue.
-3. Si no hay número de placa (el "-número" final), deja la dirección hasta donde corresponda y no inventes datos.
-4. Punto "." dentro de la dirección vial: eliminarlo. Ej: "Cra. 16" → "Carrera 16".
-5. Dirección ambigua sin tipo de vía claro: haz tu mejor interpretación y ponla como dirección.
+══════════════════════════════════════════════════════
 
-═══════════════════════════════════════════════
-NORMALIZACIÓN OBLIGATORIA
-═══════════════════════════════════════════════
-- Expandir abreviaciones de tipo de vía (Cra→Carrera, Cl→Calle, Tv→Transversal, Dg→Diagonal, Av→Avenida)
-- Mantener el símbolo # para la intersección
-- Mantener el guión - antes del número de placa
-- Capitalizar correctamente (no TODO MAYÚSCULAS, no todo minúsculas)
+Casillero/W/CED al inicio: extraer la dirección del resto, código al complemento.
+  "W3890 Calle 142 #17A-40 local 1" → dirección: "Calle 142 # 17A - 40"  complemento: "Casillero W3890 - Local 1"
 
-═══════════════════════════════════════════════
-EJEMPLOS RESUELTOS
-═══════════════════════════════════════════════
-Input:  "Calle 63F # 76 -66|Alameda de Villa Luz 2 Torre 6 apto 503"
-Output: {"direccion": "Calle 63F # 76-66", "complemento": "Torre 6 Apto 503 - Alameda de Villa Luz 2"}
+Múltiples "|": todo desde el primero va al complemento.
 
-Input:  "cra 78h # 56a- 25 sur|CASA 1 PISO"
-Output: {"direccion": "Carrera 78H # 56A-25 Sur", "complemento": "Casa 1 Piso"}
+Puntos en abreviaciones: eliminar. "Cra." → "Carrera"  "Cl." → "Calle"
 
-Input:  "CARRERA 11 BIS # 124 A 90  TORRE 4 APTO 704|BUGANVILLA"
-Output: {"direccion": "Carrera 11 BIS # 124A-90", "complemento": "Torre 4 Apto 704 - Buganvilla"}
+══════════════════════════════════════════════════════
+EJEMPLOS CORRECTOS — APRENDER ESTE PATRÓN DE CORTE
+══════════════════════════════════════════════════════
 
-Input:  "Cra. 16 #57-14 LOCAL LAVASECO 1973 BRR SAN LUIS LOC CHAPINERO Diagonal al OXXO"
-Output: {"direccion": "Carrera 16 # 57-14", "complemento": "Local Lavaseco 1973 - Barrio San Luis, Chapinero - Diagonal al OXXO"}
+Input:  "Carrera 113 # 89 F 28|Ciudadela Colsubsidio"
+Output: {"direccion": "Carrera 113 # 89F - 28", "complemento": "Ciudadela Colsubsidio"}
 
-Input:  "CASILLERO CED 8942. Carrera 19 #147-30. Local 09 CC La Juguetería"
-Output: {"direccion": "Carrera 19 # 147-30", "complemento": "Casillero CED 8942 - Local 09 CC La Juguetería"}
+Input:  "Carrera 2a # 17 a- 35 sur Interior 24 apto 204|Conjunto residencial"
+Output: {"direccion": "Carrera 2A # 17A - 35 Sur", "complemento": "Interior 24 Apto 204 - Conjunto Residencial"}
 
-Input:  "Calle 137 #91-80 bloque 9 Apto 503 Conjunto Floresta de suba"
-Output: {"direccion": "Calle 137 # 91-80", "complemento": "Bloque 9 Apto 503 - Conjunto Floresta de Suba"}
+Input:  "Calle 92 # 11A - 56 APTO 401 EDIFICIO SIENA|CHICO"
+Output: {"direccion": "Calle 92 # 11A - 56", "complemento": "Apto 401 Edificio Siena - Chicó"}
 
-Input:  "TRANSVERSAL 93 #53 - 32 BOGOTÁ #18 C.E EL DORADO"
-Output: {"direccion": "Transversal 93 # 53-32", "complemento": "CE El Dorado"}
+Input:  "CARRERA 17 #145-75 TORRE 1 APTO 307 TORRE VERSALLES CEDRITOS"
+Output: {"direccion": "Carrera 17 # 145 - 75", "complemento": "Torre 1 Apto 307 - Torre Versalles Cedritos"}
 
-═══════════════════════════════════════════════
-RESPONDE ÚNICAMENTE con este JSON (sin markdown, sin explicación, sin texto adicional):
-{"direccion": "...", "complemento": "..."}
-═══════════════════════════════════════════════
+Input:  "Cra18b #106a-52 apto 408 edificio Pórtico VII|BARRIO SAN PATRICIO BOGOTA"
+Output: {"direccion": "Carrera 18B # 106A - 52", "complemento": "Apto 408 Edificio Pórtico VII - Barrio San Patricio"}
+
+Input:  "Cra 74A # 42g58sur lago timiza kennedy interior 13 apto 539 manzana 2 etapa 3"
+Output: {"direccion": "Carrera 74A # 42G - 58 Sur", "complemento": "Interior 13 Apto 539 Manzana 2 Etapa 3 - Lago Timiza Kennedy"}
+
+Input:  "CRA 48 N 150 A 63 TORRE 7 APTO 401 MADEIROS MAZUREN"
+Output: {"direccion": "Carrera 48 # 150A - 63", "complemento": "Torre 7 Apto 401 - Madeiros Mazurén"}
+
+Input:  "calle 152 b 72 91 torre 9 apto 801"
+Output: {"direccion": "Calle 152B # 72 - 91", "complemento": "Torre 9 Apto 801"}
+
+Input:  "Calle 54 10 36 apto 509"
+Output: {"direccion": "Calle 54 # 10 - 36", "complemento": "Apto 509"}
+
+Input:  "Calle 71 c 94 a 72 interior 4 ap 206"
+Output: {"direccion": "Calle 71C # 94A - 72", "complemento": "Interior 4 Ap 206"}
+
+Input:  "Calle 19A #88-66|Conjunto Residencial Santa María de hayuelos, torre 4, apartamento 302"
+Output: {"direccion": "Calle 19A # 88 - 66", "complemento": "Torre 4 Apartamento 302 - Conjunto Residencial Santa María de Hayuelos"}
+
+Input:  "Calle 79 No. 69Q 06|Barrio Ferias Engativá"
+Output: {"direccion": "Calle 79 # 69Q - 6", "complemento": "Barrio Ferias Engativá"}
+
+Input:  "Calle 37b Sur # 72K-9, Kennedy, Bogotá|edificio de 3 pisos"
+Output: {"direccion": "Calle 37B Sur # 72K - 9", "complemento": "Edificio de 3 pisos"}
+
+Input:  "carrera 79 # 19 - 19 Edificio el Manantial. torre 2 apto 203"
+Output: {"direccion": "Carrera 79 # 19 - 19", "complemento": "Torre 2 Apto 203 - Edificio El Manantial"}
+
+Input:  "CALLE 66 C #122 A - 63 TERCER PISO|TERCER PISO - ENGATIVA CENTRO"
+Output: {"direccion": "Calle 66C # 122A - 63", "complemento": "Tercer Piso - Engativá Centro"}
+
+Input:  "Carrera 12 Bis N 25 32 Sur - Barrio San José Sur"
+Output: {"direccion": "Carrera 12 BIS # 25 - 32 Sur", "complemento": "Barrio San José Sur"}
+
+Input:  "carrera 30 #35-21 sur casa amarilla | barrio villa mayor antigua"
+Output: {"direccion": "Carrera 30 # 35 - 21 Sur", "complemento": "Casa amarilla - Barrio Villa Mayor Antigua"}
+
+Input:  "CARRERA 94 #71 A - 86|SALINAS - ALAMOS NORTE"
+Output: {"direccion": "Carrera 94 # 71A - 86", "complemento": "Salinas - Álamos Norte"}
+
+Input:  "CARRERA 107A Bis #72-22 PISO 3"
+Output: {"direccion": "Carrera 107A BIS # 72 - 22", "complemento": "Piso 3"}
+
+Input:  "CALLE 16 F # 99-72 APTO 1708 TORRE 4|CONJUNTO PARQUE CENTRAL FONTIBON"
+Output: {"direccion": "Calle 16F # 99 - 72", "complemento": "Torre 4 Apto 1708 - Conjunto Parque Central Fontibón"}
+
+Input:  "carrera 81 h # 51c-81 sur|casa de rejas negras y blancas"
+Output: {"direccion": "Carrera 81H # 51C - 81 Sur", "complemento": "Casa de rejas negras y blancas"}
+
+Input:  "Diagonal 74 # 6-66|Barrio bellavista apto 502"
+Output: {"direccion": "Diagonal 74 # 6 - 66", "complemento": "Apto 502 - Barrio Bellavista"}
+
+Input:  "Transversal 59 # 104 B - 41 apt 201 Edificio Biombo|Edificio Biombo"
+Output: {"direccion": "Transversal 59 # 104B - 41", "complemento": "Apt 201 - Edificio Biombo"}
+
+Input:  "Diagonal 182 #20-17|Conjunto Kuraka - Torre 1 Apto 604"
+Output: {"direccion": "Diagonal 182 # 20 - 17", "complemento": "Torre 1 Apto 604 - Conjunto Kuraka"}
+
+Input:  "W3890 Calle 142 #17A-40 local 1 codigo postal 110121|W3890"
+Output: {"direccion": "Calle 142 # 17A - 40", "complemento": "Casillero W3890 - Local 1"}
+
+Input:  "Cra. 13F Este #76-67 Sur Barrio La Flora Usme"
+Output: {"direccion": "Carrera 13F Este # 76 - 67 Sur", "complemento": "Barrio La Flora - Usme"}
+
+Input:  "CARRERA 71 B BIS # 12A 40|INTERIOR 3 APARTAMENTO 201"
+Output: {"direccion": "Carrera 71B BIS # 12A - 40", "complemento": "Interior 3 Apartamento 201"}
+
+Input:  "calle 86 a #69t-41 conjunto torres del sol torre 1 apto 1301"
+Output: {"direccion": "Calle 86A # 69T - 41", "complemento": "Torre 1 Apto 1301 - Conjunto Torres del Sol"}
+
+Input:  "Calle 59C Sur #88H-15 TO 1 APTO 904 Conjunto Atalaya"
+Output: {"direccion": "Calle 59C Sur # 88H - 15", "complemento": "Torre 1 Apto 904 - Conjunto Atalaya"}
+
+Input:  "Calle 129 N° 7 D - 26, apto 301. CR. Pinos del Norte Barrio: Bella Suiza"
+Output: {"direccion": "Calle 129 # 7D - 26", "complemento": "Apto 301 - Pinos del Norte, Barrio Bella Suiza"}
+
+Input:  "carrera 87d #35b 09 sur|FRENTE AL COLEGIO CIUDAD PATIO BONITO"
+Output: {"direccion": "Carrera 87D # 35B - 9 Sur", "complemento": "Frente al Colegio Ciudad Patio Bonito"}
+
+Input:  "Calle 147 #9-60 Apto 905|Edificio Murano"
+Output: {"direccion": "Avenida Calle 147 # 9 - 60", "complemento": "Apto 905 - Edificio Murano"}
+
+Input:  "Cra 19 #35-42|Bogotá Barrio la soledad MOE"
+Output: {"direccion": "Avenida Carrera 19 # 35 - 42", "complemento": "Barrio La Soledad"}
+
+Input:  "Transversal 78HBis # 43 A 21 sur|Casa - piso 3"
+Output: {"direccion": "Transversal 78H BIS # 43A - 21 Sur", "complemento": "Casa Piso 3"}
+
+Input:  "Calle 127 D Bis A # 91 D 05|Droguería Rincón la Palma"
+Output: {"direccion": "Calle 127D BIS A # 91D - 5", "complemento": "Droguería Rincón La Palma"}
+
+Input:  "Carrera 102 a # 56f - 29 Sur|- BOSA SANTAFE EL RECUERDO Casa"
+Output: {"direccion": "Carrera 102A # 56F - 29 Sur", "complemento": "Casa - Bosa Santa Fe El Recuerdo"}
+
+Input:  "calle 38 D SUR # 68L 33"
+Output: {"direccion": "Calle 38D Sur # 68L - 33", "complemento": ""}
+
+Input:  "Carrera 17 f # 69 - 55 sur barrio lucero bajo local 1"
+Output: {"direccion": "Carrera 17F # 69 - 55 Sur", "complemento": "Local 1 - Barrio Lucero Bajo"}
+
+Input:  "Diagonal 33a sur #90a92|Entregar en el lavadero antes de las 6pm"
+Output: {"direccion": "Diagonal 33A Sur # 90A - 92", "complemento": "Entregar antes de las 6pm"}
+
+Input:  "Cra78j#58-58sur"
+Output: {"direccion": "Carrera 78J # 58 - 58 Sur", "complemento": ""}
+
+Input:  "Calle 2 - 18 A - 55"
+Output: {"direccion": "Calle 2 # 18A - 55", "complemento": ""}
+
+Input:  "Carrera 52#39sur-75 apartamento 402 barrio alqueria"
+Output: {"direccion": "Carrera 52 # 39 - 75 Sur", "complemento": "Apartamento 402 - Barrio Alquería"}
+
+Input:  "Caminos de arrayanes calle 214#111-12 manzana 10 casa 68"
+Output: {"direccion": "Calle 214 # 111 - 12", "complemento": "Manzana 10 Casa 68 - Caminos de Arrayanes"}
+
+Input:  "Cl. 22c #29a-47 BLO 10 AP 1012 Conjunto Residencial Colseguros Brr Samper Mendoza"
+Output: {"direccion": "Calle 22C # 29A - 47", "complemento": "Bloque 10 Ap 1012 - Conjunto Residencial Colseguros, Barrio Samper Mendoza"}
+
+Input:  "CARRERA 89 A BIS # 8 A-25 KENNEDY CASTILLA|AGRUPACION RESIDENCIAL TOLEDO TORRE 2 APT 1207"
+Output: {"direccion": "Carrera 89A BIS # 8A - 25", "complemento": "Torre 2 Apt 1207 - Agrupación Residencial Toledo"}
+
+Input:  "Calle 45 sur # 72B-17 casa 19 saucos del bosque"
+Output: {"direccion": "Calle 45 Sur # 72B - 17", "complemento": "Casa 19 - Saucos del Bosque"}
+
+Input:  "Cra. 147 A #142 - 30 Torre 17 - Apto. 303|Conjunto: Ciudadela CAFAM II Suba"
+Output: {"direccion": "Carrera 147A # 142 - 30", "complemento": "Torre 17 Apto 303 - Ciudadela CAFAM II, Suba"}
+
+Input:  "Cra 98 # 41 sur 43|barrio los Almendros casa rosada dos pisos"
+Output: {"direccion": "Carrera 98 # 41 - 43 Sur", "complemento": "Casa rosada dos pisos - Barrio Los Almendros"}
+
+Input:  "Calle 57b sur 65- 80 villa del rio|Azadero los pollos de don pollo esquina"
+Output: {"direccion": "Calle 57B Sur # 65 - 80", "complemento": "Villa del Río - Azadero Los Pollos de Don Pollo"}
+
+Input:  "Calle 34 a sur # 97 f-41 casa 39 etapa 2"
+Output: {"direccion": "Calle 34A Sur # 97F - 41", "complemento": "Casa 39 Etapa 2"}
+
+Input:  "Kra 13 # 66 - 09 Tekto de las Flores Apto 711 Chapinero Bogotá"
+Output: {"direccion": "Carrera 13 # 66 - 9", "complemento": "Apto 711 - Tekto de las Flores, Chapinero"}
+
+Input:  "Calle 152 D # 102B-10. Conjunto residencial Nuevo Suba, etapa lV torre 7, apartamento 302"
+Output: {"direccion": "Calle 152D # 102B - 10", "complemento": "Torre 7 Apartamento 302 - Conjunto Residencial Nuevo Suba Etapa IV"}
 
 Dirección a procesar: "${address}"`;
   const res=await fetch("https://api.anthropic.com/v1/messages",{
