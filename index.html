@@ -280,17 +280,98 @@ function renderPreview(rows,addrCol){
 }
 
 async function cleanWithAI(address){
-  const prompt=`Eres un experto en direcciones colombianas. Separa la dirección principal de la información complementaria.
+  const prompt=`Eres un experto en nomenclatura vial colombiana. Tu única tarea es separar la dirección oficial de cualquier información complementaria.
 
-REGLAS:
-1. Dirección principal: SOLO tipo de vía + número geocodificable (ej: "Calle 63F # 76-66", "Carrera 78H # 56A-25 Sur").
-2. Complemento: torre, apto, bloque, barrio, conjunto, local, edificio, referencias, casillero CED, nombres de personas.
-3. Si hay "|" úsalo como separador pero valida que la parte principal sea solo la vía.
-4. Casillero o CED al inicio → va completo al complemento.
-5. Normaliza: Cra→Carrera, Cl→Calle, Tv→Transversal, Dg→Diagonal, Av→Avenida.
-6. Responde SOLO JSON sin markdown: {"direccion": "...", "complemento": "..."}
+═══════════════════════════════════════════════
+ESTRUCTURA OFICIAL DE DIRECCIÓN COLOMBIANA
+═══════════════════════════════════════════════
+Formato: [Tipo de vía] [Número de vía] # [Vía generadora] - [Número de placa]
+Ejemplo: Calle 63F # 76-66 | Carrera 7A # 45-30 Sur | Diagonal 22 # 14-55
 
-Dirección: "${address}"`;
+TIPOS DE VÍA VÁLIDOS (con sus abreviaciones a normalizar):
+- Calle    → Calle   (Cl, Cll, Cl., Calle)
+- Carrera  → Carrera (Cra, Cra., Kr, Kra, Cr)
+- Avenida  → Avenida (Av, Av., Ave)
+- Diagonal → Diagonal (Dg, Dg.)
+- Transversal → Transversal (Tv, Tv., Trans)
+- Autopista → Autopista (Auto Norte, Auto Sur, etc.)
+- Circular → Circular
+- Circunvalar → Circunvalar
+
+SUFIJOS DE VÍA que SÍ pertenecen a la dirección principal (NO son complemento):
+- Letras: A, B, C, D... ej: "Calle 63F", "Carrera 7A"
+- BIS: ej: "Carrera 11 BIS"
+- Sur, Norte, Este, Oeste: ej: "Calle 13 Sur", "Carrera 56A-25 Sur"
+- Combinaciones: "56A-25 Sur", "124 A 90"
+
+═══════════════════════════════════════════════
+REGLA PRINCIPAL
+═══════════════════════════════════════════════
+La dirección limpia = [Tipo de vía] [Número] # [Vía generadora] - [Placa]
+TODO lo que venga después de esa estructura va al complemento.
+
+═══════════════════════════════════════════════
+QUÉ VA AL COMPLEMENTO (NO a la dirección)
+═══════════════════════════════════════════════
+- Edificio, Torre, Bloque, Etapa
+- Apartamento / Apto / Apt
+- Casa, Interior (Int), Piso
+- Local, Oficina, Consultorio
+- Conjunto, Urbanización, Ciudadela, Unidad Residencial
+- Barrio, Sector, Zona
+- Referencias: "diagonal al", "frente a", "cerca de"
+- Nombres propios de conjuntos o edificios
+- Nombres de personas o empresas
+- Casillero, CED, W-xxxx (códigos de casillero)
+- Instrucciones de entrega
+
+═══════════════════════════════════════════════
+CASOS ESPECIALES
+═══════════════════════════════════════════════
+1. Separador "|": lo que está antes del | suele ser la dirección, lo de después el complemento. Valida igual.
+2. Casillero / CED / W-xxxx al inicio: TODO va al complemento, extrae la dirección del texto que sigue.
+3. Si no hay número de placa (el "-número" final), deja la dirección hasta donde corresponda y no inventes datos.
+4. Punto "." dentro de la dirección vial: eliminarlo. Ej: "Cra. 16" → "Carrera 16".
+5. Dirección ambigua sin tipo de vía claro: haz tu mejor interpretación y ponla como dirección.
+
+═══════════════════════════════════════════════
+NORMALIZACIÓN OBLIGATORIA
+═══════════════════════════════════════════════
+- Expandir abreviaciones de tipo de vía (Cra→Carrera, Cl→Calle, Tv→Transversal, Dg→Diagonal, Av→Avenida)
+- Mantener el símbolo # para la intersección
+- Mantener el guión - antes del número de placa
+- Capitalizar correctamente (no TODO MAYÚSCULAS, no todo minúsculas)
+
+═══════════════════════════════════════════════
+EJEMPLOS RESUELTOS
+═══════════════════════════════════════════════
+Input:  "Calle 63F # 76 -66|Alameda de Villa Luz 2 Torre 6 apto 503"
+Output: {"direccion": "Calle 63F # 76-66", "complemento": "Torre 6 Apto 503 - Alameda de Villa Luz 2"}
+
+Input:  "cra 78h # 56a- 25 sur|CASA 1 PISO"
+Output: {"direccion": "Carrera 78H # 56A-25 Sur", "complemento": "Casa 1 Piso"}
+
+Input:  "CARRERA 11 BIS # 124 A 90  TORRE 4 APTO 704|BUGANVILLA"
+Output: {"direccion": "Carrera 11 BIS # 124A-90", "complemento": "Torre 4 Apto 704 - Buganvilla"}
+
+Input:  "Cra. 16 #57-14 LOCAL LAVASECO 1973 BRR SAN LUIS LOC CHAPINERO Diagonal al OXXO"
+Output: {"direccion": "Carrera 16 # 57-14", "complemento": "Local Lavaseco 1973 - Barrio San Luis, Chapinero - Diagonal al OXXO"}
+
+Input:  "CASILLERO CED 8942. Carrera 19 #147-30. Local 09 CC La Juguetería"
+Output: {"direccion": "Carrera 19 # 147-30", "complemento": "Casillero CED 8942 - Local 09 CC La Juguetería"}
+
+Input:  "Calle 137 #91-80 bloque 9 Apto 503 Conjunto Floresta de suba"
+Output: {"direccion": "Calle 137 # 91-80", "complemento": "Bloque 9 Apto 503 - Conjunto Floresta de Suba"}
+
+Input:  "TRANSVERSAL 93 #53 - 32 BOGOTÁ #18 C.E EL DORADO"
+Output: {"direccion": "Transversal 93 # 53-32", "complemento": "CE El Dorado"}
+
+═══════════════════════════════════════════════
+RESPONDE ÚNICAMENTE con este JSON (sin markdown, sin explicación, sin texto adicional):
+{"direccion": "...", "complemento": "..."}
+═══════════════════════════════════════════════
+
+Dirección a procesar: "${address}"`;
   const res=await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
